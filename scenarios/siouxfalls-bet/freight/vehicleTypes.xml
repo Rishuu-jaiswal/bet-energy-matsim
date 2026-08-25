@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<vehicleDefinitions
+        xmlns="http://www.matsim.org/files/dtd"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.matsim.org/files/dtd
+        http://www.matsim.org/files/dtd/vehicleDefinitions_v2.0.xsd">
+
+    <!--
+        Baseline Sioux Falls freight truck.
+
+        IMPORTANT:
+        capacity "other" is the MATSim Freight capacity/demand unit.
+        Physical BET mass in kg is handled separately by our energy model.
+    -->
+
+    <vehicleType id="freightTruck">
+
+        <description>
+            Sioux Falls baseline freight truck
+        </description>
+
+        <capacity
+                seats="1"
+                standingRoomInPersons="0"
+                other="10.0"/>
+
+        <costInformation
+                fixedCostsPerDay="100.0"
+                costsPerMeter="0.001"
+                costsPerSecond="0.008"/>
+
+        <networkMode networkMode="car"/>
+
+    </vehicleType>
+
+</vehicleDefinitions>

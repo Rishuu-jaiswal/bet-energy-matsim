@@ -1,0 +1,43 @@
+*.class
+
+# Java / Maven
+target/
+*.class
+*.jar
+
+# IntelliJ
+.idea/
+*.iml
+
+# MATSim outputs
+output*/
+scenarios/**/output*/
+*.log
+
+# Temporary result/debug files
+bet-final.txt
+bet-grade.txt
+bet-run.txt
+freight-events.txt
+
+# Archives
+*.zip
+*.rar
+*.tar.gz
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Temporary working directories
+temp-freight-source/
+temp-freight/
+temp-sioux/
+
+target/
+output*/
+*.log
+*.zip
+
+**/output_events.xml.zst
+**/output_plans.xml.zst

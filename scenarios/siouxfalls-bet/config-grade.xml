@@ -1,0 +1,22 @@
+<?xml version="1.0" ?>
+<!DOCTYPE config SYSTEM "http://www.matsim.org/files/dtd/config_v2.dtd">
+
+<config>
+
+	<module name="network">
+		<param name="inputNetworkFile" value="./network-with-grade.xml" />
+	</module>
+
+	<module name="freightCarriers">
+		<param name="carriersFile" value="./freight/carrierPlans.xml" />
+		<param name="carriersVehicleTypeFile" value="./freight/vehicleTypes.xml" />
+	</module>
+
+	<module name="controller">
+		<param name="outputDirectory" value="./output-freight-baseline" />
+		<param name="firstIteration" value="0" />
+		<param name="lastIteration" value="0" />
+		<param name="overwriteFiles" value="deleteDirectoryIfExists" />
+	</module>
+
+</config>
