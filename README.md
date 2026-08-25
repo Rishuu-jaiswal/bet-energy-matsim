@@ -121,17 +121,15 @@ Was used to inspect MATSim freight events and verify vehicle movement through th
 
 ```text
 Distance = 35.84 km
-Energy consumption = 19.847 kWh
-Energy intensity ≈ 0.554 kWh/km
-```
+Energy consumption = 21.627 kWh
+Energy intensity = 0.6034 kWh/km
 
 ### Network with synthetic grade
 
 ```text
 Distance = 35.84 km
 Energy consumption = 21.523 kWh
-Energy intensity = 0.601 kWh/km
-```
+Energy intensity = 0.6005 kWh/km
 
 The distance is unchanged because the same network topology and freight tour are used.
 
