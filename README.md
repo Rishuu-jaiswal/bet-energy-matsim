@@ -1,77 +1,176 @@
-# matsim-example-project
 
-A small example of how to use MATSim as a library.
+# BET Freight Energy Model in MATSim
 
-By default, this project uses the latest (pre-)release. In order to use a different version, edit `pom.xml`.
+This repository contains the implementation of a battery-electric truck (BET) energy consumption model integrated with MATSim freight simulation.
 
-[//]: # (A recommended directory structure is as follows:)
+The main objective is to calculate link-level truck energy consumption while considering vehicle mass, changing freight payload, travel conditions, and road grade.
 
-[//]: # (* `src` for sources)
+## Main Features
 
-[//]: # (* `original-input-data` for original input data &#40;typically not in MATSim format&#41;)
+The implementation considers:
 
-[//]: # (* `scenarios` for MATSim scenarios, i.e. MATSim input and output data.  A good way is the following:)
+- Vehicle self-weight
+- Dynamic freight payload
+- Total vehicle mass
+- Link distance
+- Link travel time
+- Rolling resistance
+- Aerodynamic resistance
+- Inertial resistance
+- Road grade
+- Drivetrain efficiency
+- Regenerative braking
 
-[//]: # (  * One subdirectory for each scenario, e.g. `scenarios/mySpecialScenario01`.)
+## Dynamic Vehicle Mass
 
-[//]: # (  * This minimally contains a config file, a network file, and a population file.)
+Vehicle mass is calculated as:
 
-[//]: # (  * Output goes one level down, e.g. `scenarios/mySpecialScenario01/output-from-a-good-run/...`.)
-  
-  
-### Import into eclipse
-
-1. download a modern version of eclipse. This should have maven and git included by default.
-1. `file->import->git->projects from git->clone URI` and clone as specified above.  _It will go through a 
-sequence of windows; it is important that you import as 'general project'._
-1. `file->import->maven->existing maven projects`
-
-Sometimes, step 3 does not work, in particular after previously failed attempts.  Sometimes, it is possible to
-right-click to `configure->convert to maven project`.  If that fails, the best thing seems to remove all 
-pieces of the failed attempt in the directory and start over.
-
-### Import into IntelliJ
-
-`File -> New -> Project from Version Control` paste the repository url and hit 'clone'. IntelliJ usually figures out
-that the project is a maven project. If not: `Right click on pom.xml -> import as maven project`.
-
-### Java Version
-
-The project uses Java 25. Usually a suitable SDK is packaged within IntelliJ or Eclipse. Otherwise, one must install a
-suitable sdk manually, which is available [here](https://openjdk.java.net/)
-
-### Building and Running it locally
-
-You can build an executable jar-file by executing the following command:
-
-```sh
-./mvnw clean package
+```text
+total vehicle mass = truck self-weight + current payload
 ```
 
-or on Windows:
+The payload is updated during the freight tour using MATSim freight events.
 
-```sh
-mvnw.cmd clean package
+For the current Sioux Falls experiment:
+
+```text
+Truck self-weight = 12,000 kg
+Shipment payload = 8,000 kg
+Loaded vehicle mass = 20,000 kg
+Empty vehicle mass = 12,000 kg
 ```
 
-This will download all necessary dependencies (it might take a while the first time it is run) and create a file `matsim-example-project-0.0.1-SNAPSHOT.jar` in the top directory.
-This jar-file can be executed with Java on the command line. You need to pass a command to the jar file.
-To simply run MATSim based on a config file, pass `run --config <path>`. To get the GUI, pass `gui`. For more options, pass `help`.
+These mass values are assumptions used for the controlled experiment.
 
-```sh
-java -jar matsim-example-project-0.0.1-SNAPSHOT.jar <command>
+## Sioux Falls Test Scenario
+
+The model was tested using the Sioux Falls MATSim road network.
+
+The same road-network topology is used for both experiments:
+
+1. Flat-road case
+2. Road-grade case
+
+For the second case, a `grade` attribute was added to the existing network links. Therefore, `network-with-grade.xml` is not a different road network; it is the same network with additional grade information.
+
+The current grade values are synthetic and are used to test the sensitivity of the energy model to road slope.
+
+Examples:
+
+```text
+grade =  0.05  -> 5% uphill
+grade =  0.00  -> flat
+grade = -0.05  -> 5% downhill
 ```
 
+## Freight Simulation
 
+The freight scenario contains a carrier, freight vehicle, and shipment.
 
-### Licenses
-(The following paragraphs need to be adjusted according to the specifications of your project.)
+MATSim/jsprit generates the freight vehicle tour. During simulation, the energy model reads the actual link traversal events.
 
-The **MATSim program code** in this repository is distributed under the terms of the [GNU General Public License as published by the Free Software Foundation (version 2)](https://www.gnu.org/licenses/old-licenses/gpl-2.0.en.html). The MATSim program code are files that reside in the `src` directory hierarchy and typically end with `*.java`.
+Payload changes are tracked during pickup and delivery so that energy is calculated using the appropriate vehicle mass.
 
-The **MATSim input files, output files, analysis data and visualizations** are licensed under a <a rel="license" href="http://creativecommons.org/licenses/by/4.0/">Creative Commons Attribution 4.0 International License</a>.
-<a rel="license" href="http://creativecommons.org/licenses/by/4.0/"><img alt="Creative Commons License" style="border-width:0" src="https://i.creativecommons.org/l/by/4.0/80x15.png" /></a><br /> MATSim input files are those that are used as input to run MATSim. They often, but not always, have a header pointing to matsim.org. They typically reside in the `scenarios` directory hierarchy. MATSim output files, analysis data, and visualizations are files generated by MATSim runs, or by postprocessing.  They typically reside in a directory hierarchy starting with `output`.
+## Important Files
 
-**Other data files**, in particular in `original-input-data`, have their own individual licenses that need to be individually clarified with the copyright holders.
+### Energy model
 
+`FreightOhdeSlaskiDriveEnergyConsumption.java`
 
+Calculates BET energy consumption for each travelled link. It contains the physical resistance terms, road-grade contribution, drivetrain efficiency, and regenerative braking treatment.
+
+### Energy event handler
+
+`FreightEnergyHandler.java`
+
+Reads MATSim link events, obtains link travel time and distance, calls the energy model, and accumulates total energy and distance.
+
+### Payload tracker
+
+`FreightVehiclePayloadTracker.java`
+
+Stores the current freight payload of each vehicle.
+
+### Payload event handler
+
+`FreightPayloadEventHandler.java`
+
+Updates vehicle payload when freight pickup and delivery events occur.
+
+### Freight simulation runner
+
+`RunSiouxFallsFreight.java`
+
+Loads the Sioux Falls scenario and freight inputs, generates the freight solution, registers the payload and energy handlers, runs MATSim, and reports the BET energy results.
+
+### Grade network generator
+
+`CreateGradedSiouxFallsNetwork.java`
+
+Adds the synthetic `grade` attribute to links of the Sioux Falls network.
+
+### Event inspection
+
+`InspectFreightEvents.java`
+
+Was used to inspect MATSim freight events and verify vehicle movement through the network.
+
+## Results
+
+### Flat network
+
+```text
+Distance = 35.84 km
+Energy consumption = 19.847 kWh
+Energy intensity ≈ 0.554 kWh/km
+```
+
+### Network with synthetic grade
+
+```text
+Distance = 35.84 km
+Energy consumption = 21.523 kWh
+Energy intensity = 0.601 kWh/km
+```
+
+The distance is unchanged because the same network topology and freight tour are used.
+
+The energy consumption changes because the second experiment includes road-grade forces and regenerative braking.
+
+Individual downhill links can produce negative traction-energy values when recovered regenerative energy exceeds propulsion demand on that link.
+
+## Building the Project
+
+On Windows:
+
+```cmd
+mvnw.cmd compile
+```
+
+## Running the Sioux Falls Freight Experiment
+
+```cmd
+mvnw.cmd exec:java -Dexec.mainClass=org.matsim.project.sioux.RunSiouxFallsFreight
+```
+
+## Tests
+
+Energy-related tests are located under:
+
+```text
+src/test/java/org/matsim/project/energy/
+```
+
+The tests cover the freight energy calculation, payload tracking, factory implementation, and grade-dependent behaviour.
+
+## Current Limitations
+
+The Sioux Falls experiment is currently a controlled implementation test rather than a real-world validation.
+
+In particular:
+
+- Road grades are synthetic.
+- Truck self-weight and shipment mass are experimental assumptions.
+- The energy-model parameters still require appropriate calibration/validation for a real BET application.
+
+The next step is therefore to apply the model to a real-world freight scenario containing realistic freight demand, vehicle characteristics, and elevation-derived road grades, and compare the resulting energy consumption against suitable reference or observed data.
