@@ -6,36 +6,49 @@ import org.matsim.contrib.ev.discharging.DriveEnergyConsumption;
 import org.matsim.vehicles.Vehicle;
 
 /**
- * Ohde-Slaski based drive-energy-consumption model
- * extended for battery-electric freight vehicles.
+ * Link-based drive-energy-consumption model for
+ * battery-electric freight vehicles in MATSim.
  *
- * Extensions:
- * 1. Dynamic mass:
- *      m = self weight + current goods weight
+ * The model considers:
  *
- * 2. Road grade:
- *      F_roll  = Cr * m * g * cos(theta)
- *      F_grade = m * g * sin(theta)
+ * 1. Dynamic vehicle mass
+ *    m = selfWeight + currentPayload
  *
- * 3. Regenerative braking:
- *      positive wheel power -> battery discharge
- *      negative wheel power -> battery recuperation
+ * 2. Rolling resistance
+ *
+ * 3. Aerodynamic resistance
+ *
+ * 4. Empirical truck acceleration as a function
+ *    of link-average speed
+ *
+ * 5. Inertia resistance
+ *
+ * 6. Road grade
+ *
+ * 7. Propulsion drivetrain losses
+ *
+ * 8. Regenerative energy when calculated wheel
+ *    power becomes negative
  *
  * Grade convention:
- *      0.05  = +5% uphill
- *      0.00  = flat
- *     -0.05  = -5% downhill
  *
- * theta = atan(grade)
+ *  0.05 = +5% uphill
+ *  0.00 = flat
+ * -0.05 = -5% downhill
  */
 public final class FreightOhdeSlaskiDriveEnergyConsumption
         implements DriveEnergyConsumption {
 
     // --------------------------------------------------
-    // Physical constant
+    // Physical constants
     // --------------------------------------------------
 
     private static final double G = 9.81;
+
+    /**
+     * Standard air density [kg/m3].
+     */
+    private static final double AIR_DENSITY = 1.225;
 
 
     // --------------------------------------------------
@@ -45,58 +58,94 @@ public final class FreightOhdeSlaskiDriveEnergyConsumption
     private final Id<Vehicle> vehicleId;
 
     /**
-     * Empty/self mass of the BET [kg].
+     * Base/self vehicle mass supplied by the caller [kg].
+     *
+     * Total mass used by the energy model is:
+     *
+     * m = selfWeightKg + current payload
      */
     private final double selfWeightKg;
 
     /**
-     * Provides current freight payload [kg].
+     * Provides the current freight payload [kg].
      */
     private final FreightVehiclePayloadTracker payloadTracker;
 
 
     // --------------------------------------------------
-    // Ohde-Slaski parameters
+    // BET model parameters
     // --------------------------------------------------
 
     /**
-     * Propulsion drivetrain efficiency [-].
+     * Constant propulsion drivetrain efficiency [-].
+     *
+     * This is currently treated as a modelling parameter
+     * and should be documented and checked through
+     * sensitivity analysis / validation.
      */
-    private static final double DRIVETRAIN_EFFICIENCY = 0.935;
+    private static final double DRIVETRAIN_EFFICIENCY = 0.91;
 
     /**
-     * Regenerative braking efficiency [-].
+     * Regenerative efficiency [-].
      *
-     * 0.70 means that 70% of available negative
-     * mechanical wheel energy reaches the battery.
+     * When calculated wheel power becomes negative,
+     * 80% of that mechanical energy is assumed to reach
+     * the battery.
      *
-     * This should later be calibrated/documented.
+     * This does not explicitly reconstruct individual
+     * braking manoeuvres.
      */
-    private static final double REGEN_EFFICIENCY = 0.70;
+    private static final double REGEN_EFFICIENCY = 0.80;
 
-    private static final double ROLLING_COEFFICIENT = 0.01;
+    /**
+     * Rolling resistance coefficient [-].
+     */
+    private static final double ROLLING_COEFFICIENT = 0.0052;
 
-    private static final double AERODYNAMIC_COEFFICIENT = 0.4193;
+    /**
+     * Aerodynamic drag area CdA [m2].
+     */
+    private static final double DRAG_AREA_CDA = 5.63;
 
+    /**
+     * Empirical inertia scaling inherited from the
+     * Ohde-Slaski average-speed formulation.
+     *
+     * This value has NOT yet been truck-calibrated.
+     * It must be investigated and validated separately.
+     */
     private static final double INERTIA_COEFFICIENT = 0.191;
 
 
     // --------------------------------------------------
-    // Acceleration approximation
+    // Truck-calibrated acceleration relationship
     // --------------------------------------------------
 
-    /*
+    /**
      * a(v) = A1 * ln(v) + A2
+     *
+     * v must be in m/s.
+     *
+     * The coefficients were calibrated from truck
+     * probe data using median positive acceleration
+     * in sustained positive-acceleration episodes.
+     *
+     * Calibration range:
+     * approximately 20-95 km/h.
+     *
+     * Values outside this range are extrapolated.
      */
-    private static final double A1 = -0.267;
+    private static final double A1 = -0.1968093906;
+    private static final double A2 =  0.7202936833;
 
-    private static final double A2 = 0.99819;
-
+    /**
+     * Prevents ln(0).
+     */
     private static final double ZERO_SPEED = 0.01;
 
 
     // --------------------------------------------------
-    // Link attributes
+    // MATSim link attributes
     // --------------------------------------------------
 
     private static final String GRADE_ATTRIBUTE = "grade";
@@ -117,7 +166,7 @@ public final class FreightOhdeSlaskiDriveEnergyConsumption
             );
         }
 
-        if (selfWeightKg <= 0) {
+        if (selfWeightKg <= 0.0) {
             throw new IllegalArgumentException(
                     "Vehicle self-weight must be greater than zero."
             );
@@ -140,7 +189,7 @@ public final class FreightOhdeSlaskiDriveEnergyConsumption
     // --------------------------------------------------
 
     /**
-     * Current freight payload [kg].
+     * Returns current freight payload [kg].
      */
     public double getGoodsWeightKg() {
 
@@ -149,9 +198,9 @@ public final class FreightOhdeSlaskiDriveEnergyConsumption
 
 
     /**
-     * Current total vehicle mass [kg].
+     * Returns current total vehicle mass [kg].
      *
-     * m = m_self + m_goods
+     * m = m_self + m_payload
      */
     public double getTotalWeightKg() {
 
@@ -161,17 +210,19 @@ public final class FreightOhdeSlaskiDriveEnergyConsumption
 
 
     // --------------------------------------------------
-    // Grade
+    // Road grade
     // --------------------------------------------------
 
     /**
-     * Reads the grade from the MATSim link.
+     * Reads road grade from the MATSim link.
+     *
+     * Examples:
      *
      *  0.05 = +5% uphill
      *  0.00 = flat
      * -0.05 = -5% downhill
      *
-     * Missing grade -> flat road.
+     * A missing grade attribute is interpreted as flat.
      */
     public double getGrade(Link link) {
 
@@ -190,17 +241,17 @@ public final class FreightOhdeSlaskiDriveEnergyConsumption
 
 
     // --------------------------------------------------
-    // Power calculation
+    // Battery power calculation
     // --------------------------------------------------
 
     /**
-     * Calculates battery-side drive power [W].
+     * Calculates battery-side power [W].
      *
-     * Positive power:
-     * battery is discharged.
+     * Positive:
+     * battery discharge.
      *
-     * Negative power:
-     * battery is recuperating energy.
+     * Negative:
+     * battery recuperation.
      */
     private double calculatePower(
             double speed,
@@ -211,7 +262,7 @@ public final class FreightOhdeSlaskiDriveEnergyConsumption
 
 
         // --------------------------------------------------
-        // Dynamic mass
+        // Dynamic total vehicle mass
         // --------------------------------------------------
 
         double totalWeightKg =
@@ -228,8 +279,6 @@ public final class FreightOhdeSlaskiDriveEnergyConsumption
         /*
          * grade = tan(theta)
          *
-         * therefore:
-         *
          * theta = atan(grade)
          */
         double roadAngle =
@@ -241,7 +290,9 @@ public final class FreightOhdeSlaskiDriveEnergyConsumption
         // --------------------------------------------------
 
         /*
-         * F_roll = Cr * m * g * cos(theta)
+         * F_roll =
+         *
+         * Crr * m * g * cos(theta)
          */
         double rollingResistance =
                 ROLLING_COEFFICIENT
@@ -255,20 +306,26 @@ public final class FreightOhdeSlaskiDriveEnergyConsumption
         // --------------------------------------------------
 
         /*
-         * F_aero = fa * v^2
+         * F_aero =
+         *
+         * 0.5 * rho * CdA * v^2
          */
         double aerodynamicResistance =
-                AERODYNAMIC_COEFFICIENT
+                0.5
+                        * AIR_DENSITY
+                        * DRAG_AREA_CDA
                         * safeSpeed
                         * safeSpeed;
 
 
         // --------------------------------------------------
-        // Acceleration approximation
+        // Truck-calibrated acceleration approximation
         // --------------------------------------------------
 
         /*
-         * a(v) = A1 * ln(v) + A2
+         * a(v) =
+         *
+         * A1 * ln(v) + A2
          */
         double acceleration =
                 A1 * Math.log(safeSpeed)
@@ -280,15 +337,21 @@ public final class FreightOhdeSlaskiDriveEnergyConsumption
         // --------------------------------------------------
 
         /*
-         * F_inertia = cb * a(v) * m
+         * F_inertia =
          *
-         * If acceleration becomes negative,
-         * this term becomes negative.
+         * cb * m * a(v)
+         *
+         * IMPORTANT:
+         *
+         * cb = 0.191 is currently inherited from the
+         * original average-speed formulation.
+         *
+         * It still requires truck-specific investigation.
          */
         double inertiaResistance =
                 INERTIA_COEFFICIENT
-                        * acceleration
-                        * totalWeightKg;
+                        * totalWeightKg
+                        * acceleration;
 
 
         // --------------------------------------------------
@@ -296,13 +359,15 @@ public final class FreightOhdeSlaskiDriveEnergyConsumption
         // --------------------------------------------------
 
         /*
-         * F_grade = m * g * sin(theta)
+         * F_grade =
+         *
+         * m * g * sin(theta)
          *
          * uphill:
-         * F_grade > 0
+         * positive
          *
          * downhill:
-         * F_grade < 0
+         * negative
          */
         double gradeResistance =
                 totalWeightKg
@@ -334,13 +399,9 @@ public final class FreightOhdeSlaskiDriveEnergyConsumption
         // --------------------------------------------------
 
         /*
-         * P_wheel = v * F_total
+         * P_wheel =
          *
-         * P_wheel > 0:
-         * propulsion required
-         *
-         * P_wheel < 0:
-         * braking energy available
+         * v * F_total
          */
         double wheelPower =
                 safeSpeed
@@ -354,12 +415,11 @@ public final class FreightOhdeSlaskiDriveEnergyConsumption
         if (wheelPower >= 0.0) {
 
             /*
-             * PROPULSION
+             * Propulsion:
              *
-             * Battery must provide more power than
-             * reaches the wheels because of drivetrain losses.
+             * P_battery =
              *
-             * P_battery = P_wheel / eta_drive
+             * P_wheel / eta_drive
              */
             return wheelPower
                     / DRIVETRAIN_EFFICIENCY;
@@ -367,14 +427,14 @@ public final class FreightOhdeSlaskiDriveEnergyConsumption
         } else {
 
             /*
-             * REGENERATIVE BRAKING
+             * Regeneration:
              *
-             * Only part of the available mechanical
-             * braking energy reaches the battery.
+             * P_battery =
              *
-             * P_battery = P_wheel * eta_regen
+             * P_wheel * eta_regen
              *
-             * The result remains negative.
+             * wheelPower is negative, therefore the
+             * resulting battery power remains negative.
              */
             return wheelPower
                     * REGEN_EFFICIENCY;
@@ -383,20 +443,26 @@ public final class FreightOhdeSlaskiDriveEnergyConsumption
 
 
     // --------------------------------------------------
-    // MATSim energy calculation
+    // MATSim link energy calculation
     // --------------------------------------------------
 
     /**
-     * Calculates battery energy consumed/recovered
-     * while traversing one MATSim link.
+     * Calculates battery energy consumed or recovered
+     * during traversal of one MATSim link.
      *
-     * E = P * t
+     * Average link speed:
+     *
+     * v = linkLength / travelTime
+     *
+     * Energy:
+     *
+     * E = P_battery * travelTime
      *
      * Positive energy:
-     * battery discharge.
+     * battery consumption.
      *
      * Negative energy:
-     * battery recuperation.
+     * recuperated battery energy.
      *
      * @return battery energy [J]
      */
@@ -406,12 +472,12 @@ public final class FreightOhdeSlaskiDriveEnergyConsumption
             double travelTime,
             double linkEnterTime) {
 
-        if (travelTime <= 0) {
+        if (travelTime <= 0.0) {
             return 0.0;
         }
 
 
-        // Average speed [m/s]
+        // Average MATSim link speed [m/s]
         double averageSpeed =
                 link.getLength()
                         / travelTime;
@@ -425,7 +491,7 @@ public final class FreightOhdeSlaskiDriveEnergyConsumption
                 );
 
 
-        // Battery energy [J]
+        // Link battery energy [J]
         return batteryPower
                 * travelTime;
     }
