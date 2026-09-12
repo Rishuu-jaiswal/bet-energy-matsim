@@ -62,7 +62,7 @@ public final class FreightOhdeSlaskiDriveEnergyConsumption
      *
      * Total mass used by the energy model is:
      *
-     * m = selfWeightKg + current payload
+     * m = selfWeightKg + currentPayload
      */
     private final double selfWeightKg;
 
@@ -78,10 +78,6 @@ public final class FreightOhdeSlaskiDriveEnergyConsumption
 
     /**
      * Constant propulsion drivetrain efficiency [-].
-     *
-     * This is currently treated as a modelling parameter
-     * and should be documented and checked through
-     * sensitivity analysis / validation.
      */
     private static final double DRIVETRAIN_EFFICIENCY = 0.91;
 
@@ -92,8 +88,9 @@ public final class FreightOhdeSlaskiDriveEnergyConsumption
      * 80% of that mechanical energy is assumed to reach
      * the battery.
      *
-     * This does not explicitly reconstruct individual
-     * braking manoeuvres.
+     * Explicit transient braking manoeuvres are not
+     * reconstructed because the model operates with
+     * link-average speed.
      */
     private static final double REGEN_EFFICIENCY = 0.80;
 
@@ -108,13 +105,22 @@ public final class FreightOhdeSlaskiDriveEnergyConsumption
     private static final double DRAG_AREA_CDA = 5.63;
 
     /**
-     * Empirical inertia scaling inherited from the
-     * Ohde-Slaski average-speed formulation.
+     * Empirical inertia scaling coefficient [-].
      *
-     * This value has NOT yet been truck-calibrated.
-     * It must be investigated and validated separately.
+     * Original Ohde-Slaski/MATSim baseline:
+     * cb = 0.191
+     *
+     * Current candidate value:
+     * cb = 0.562339
+     *
+     * The current value was obtained from exploratory
+     * truck-probe-data analysis and is evaluated here as
+     * a sensitivity/calibration candidate.
+     *
+     * It must not yet be interpreted as a universally
+     * validated heavy-duty-truck coefficient.
      */
-    private static final double INERTIA_COEFFICIENT = 0.191;
+    private static final double INERTIA_COEFFICIENT = 0.562339;
 
 
     // --------------------------------------------------
@@ -126,14 +132,14 @@ public final class FreightOhdeSlaskiDriveEnergyConsumption
      *
      * v must be in m/s.
      *
-     * The coefficients were calibrated from truck
-     * probe data using median positive acceleration
-     * in sustained positive-acceleration episodes.
+     * Coefficients calibrated from truck probe data using
+     * MEAN positive acceleration during sustained
+     * positive-acceleration episodes.
      *
-     * Calibration range:
+     * Calibration domain:
      * approximately 20-95 km/h.
      *
-     * Values outside this range are extrapolated.
+     * Values outside this range represent extrapolation.
      */
     private static final double A1 = -0.1968093906;
     private static final double A2 =  0.7202936833;
@@ -192,10 +198,8 @@ public final class FreightOhdeSlaskiDriveEnergyConsumption
      * Returns current freight payload [kg].
      */
     public double getGoodsWeightKg() {
-
         return payloadTracker.getPayloadKg(vehicleId);
     }
-
 
     /**
      * Returns current total vehicle mass [kg].
@@ -203,7 +207,6 @@ public final class FreightOhdeSlaskiDriveEnergyConsumption
      * m = m_self + m_payload
      */
     public double getTotalWeightKg() {
-
         return selfWeightKg
                 + payloadTracker.getPayloadKg(vehicleId);
     }
@@ -331,6 +334,16 @@ public final class FreightOhdeSlaskiDriveEnergyConsumption
                 A1 * Math.log(safeSpeed)
                         + A2;
 
+        /*
+         * The calibrated relationship represents
+         * positive acceleration behaviour.
+         *
+         * Prevent negative acceleration values caused
+         * only by extrapolation of the logarithmic fit.
+         */
+        acceleration =
+                Math.max(0.0, acceleration);
+
 
         // --------------------------------------------------
         // Inertia resistance
@@ -340,13 +353,6 @@ public final class FreightOhdeSlaskiDriveEnergyConsumption
          * F_inertia =
          *
          * cb * m * a(v)
-         *
-         * IMPORTANT:
-         *
-         * cb = 0.191 is currently inherited from the
-         * original average-speed formulation.
-         *
-         * It still requires truck-specific investigation.
          */
         double inertiaResistance =
                 INERTIA_COEFFICIENT
@@ -433,8 +439,8 @@ public final class FreightOhdeSlaskiDriveEnergyConsumption
              *
              * P_wheel * eta_regen
              *
-             * wheelPower is negative, therefore the
-             * resulting battery power remains negative.
+             * wheelPower is negative, therefore
+             * battery power remains negative.
              */
             return wheelPower
                     * REGEN_EFFICIENCY;
@@ -476,12 +482,10 @@ public final class FreightOhdeSlaskiDriveEnergyConsumption
             return 0.0;
         }
 
-
         // Average MATSim link speed [m/s]
         double averageSpeed =
                 link.getLength()
                         / travelTime;
-
 
         // Battery-side power [W]
         double batteryPower =
@@ -489,7 +493,6 @@ public final class FreightOhdeSlaskiDriveEnergyConsumption
                         averageSpeed,
                         link
                 );
-
 
         // Link battery energy [J]
         return batteryPower

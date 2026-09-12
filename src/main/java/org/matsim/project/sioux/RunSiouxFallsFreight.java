@@ -21,8 +21,18 @@ public class RunSiouxFallsFreight {
 
     public static void main(String[] args) throws Exception {
 
-        String configFile =
-                "scenarios/siouxfalls-bet/config-grade.xml";
+        String configFile;
+
+        if (args.length > 0) {
+            configFile = args[0];
+        } else {
+            configFile = "scenarios/siouxfalls-bet/config.xml";
+        }
+
+        System.out.println("=================================");
+        System.out.println("BET EXPERIMENT");
+        System.out.println("Config = " + configFile);
+        System.out.println("=================================");
 
         // --------------------------------------------------
         // Load MATSim configuration

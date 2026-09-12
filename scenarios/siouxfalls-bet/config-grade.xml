@@ -13,10 +13,12 @@
 	</module>
 
 	<module name="controller">
-		<param name="outputDirectory" value="./output-freight-baseline" />
+		<param name="outputDirectory"
+		       value="./output-freight-grade" />
 		<param name="firstIteration" value="0" />
 		<param name="lastIteration" value="0" />
-		<param name="overwriteFiles" value="deleteDirectoryIfExists" />
+		<param name="overwriteFiles"
+		       value="deleteDirectoryIfExists" />
 	</module>
 
 </config>
