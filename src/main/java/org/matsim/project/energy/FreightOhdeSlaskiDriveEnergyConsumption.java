@@ -104,23 +104,20 @@ public final class FreightOhdeSlaskiDriveEnergyConsumption
      */
     private static final double DRAG_AREA_CDA = 5.63;
 
+
     /**
-     * Empirical inertia scaling coefficient [-].
+     * Calibrated inertia coefficient used in the BET energy model.
      *
-     * Original Ohde-Slaski/MATSim baseline:
-     * cb = 0.191
+     * Final calibration value: cb = 0.075.
      *
-     * Current candidate value:
-     * cb = 0.562339
+     * Inertial force:
+     * F_inertia = cb * m * a(v).
      *
-     * The current value was obtained from exploratory
-     * truck-probe-data analysis and is evaluated here as
-     * a sensitivity/calibration candidate.
-     *
-     * It must not yet be interpreted as a universally
-     * validated heavy-duty-truck coefficient.
+     * This value reflects the calibration used in this study
+     * and should not be interpreted as universally validated.
      */
-    private static final double INERTIA_COEFFICIENT = 0.562339;
+    private static final double INERTIA_COEFFICIENT = 0.075;
+
 
 
     // --------------------------------------------------

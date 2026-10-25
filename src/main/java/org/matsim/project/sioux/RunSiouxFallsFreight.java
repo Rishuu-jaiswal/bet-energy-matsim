@@ -112,7 +112,7 @@ public class RunSiouxFallsFreight {
                         "shipment1",
                         CarrierShipment.class
                 ),
-                8_000.0
+                0.0
         );
 
         // --------------------------------------------------
@@ -133,8 +133,7 @@ public class RunSiouxFallsFreight {
         // BET energy handler
         // --------------------------------------------------
 
-        double truckSelfWeightKg =
-                12_000.0;
+        double truckSelfWeightKg = 35000.0;
 
         FreightEnergyHandler energyHandler =
                 new FreightEnergyHandler(
